@@ -1,103 +1,22 @@
-# =====================================================================
-# SIGACU / UHO — .gitignore del BACKEND (Django)
-# =====================================================================
-
-# ---------------------------------------------------------------------
-# Entornos virtuales
-# ---------------------------------------------------------------------
+# Entorno virtual
 .venv/
 venv/
 env/
-ENV/
-.env.venv/
 
-# ---------------------------------------------------------------------
-# Bytecode / caché de Python
-# ---------------------------------------------------------------------
-__pycache__/
+# Python
+_pycache_/
 *.py[cod]
-*$py.class
-*.so
-
-# Empaquetado / distribución
-build/
-dist/
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# ---------------------------------------------------------------------
-# Herramientas de test / cobertura / tipos
-# ---------------------------------------------------------------------
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-coverage.xml
-.tox/
-.nox/
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
-.ruff_cache/
-.hypothesis/
-
-# ---------------------------------------------------------------------
-# Variables de entorno (secretos)
-# Se ignoran TODOS los .env reales, pero se conserva la plantilla.
-# ---------------------------------------------------------------------
-.env
-.env.*
-!.env.example
-
-# ---------------------------------------------------------------------
-# Bases de datos locales
-# ---------------------------------------------------------------------
 *.sqlite3
-*.sqlite3-journal
-db_local.sqlite3
-db.sqlite3
 
-# ---------------------------------------------------------------------
-# Django: estáticos, media y logs
-# ---------------------------------------------------------------------
-/staticfiles/
-/static_root/
-/media/
-/logs/
+# Variables de entorno
+.env
+.env.local
+
+# Archivos estáticos y media
+staticfiles/
+media/
+
+# Logs y temporales
+.run/
 *.log
-
-# ---------------------------------------------------------------------
-# Configuración de editores / IDE / SO
-# ---------------------------------------------------------------------
-.vscode/
-.idea/
-*.iml
-*.swp
-*.swo
-*~
 .DS_Store
-Thumbs.db
-desktop.ini
-
-# ---------------------------------------------------------------------
-# Otros
-# ---------------------------------------------------------------------
-*.bak
-*.orig
-*.rej
-celerybeat-schedule
-celerybeat.pid
-celeryev.pid
