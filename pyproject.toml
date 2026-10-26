@@ -1,0 +1,36 @@
+# =====================================================================
+# SIGACU / UHO — Herramientas de calidad y empaquetado (Python)
+# ---------------------------------------------------------------------
+# Centraliza la configuración de black, isort y pytest. Flake8 se mantiene
+# en ``setup.cfg`` por compatibilidad con editores y Makefile.
+# =====================================================================
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | migrations
+  | staticfiles
+  | media
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = ["migrations", ".venv", "venv"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.testing"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["apps"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

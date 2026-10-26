@@ -1,0 +1,58 @@
+# =====================================================================
+# SIGACU / UHO — Dependencias del backend (Python)
+# ---------------------------------------------------------------------
+# Instalación:
+#   pip install -r requirements.txt
+# =====================================================================
+
+# --- Núcleo Django / DRF ---
+Django==4.2.16
+djangorestframework==3.15.2
+
+# --- Autenticación: JWT + OAuth2 ---
+djangorestframework-simplejwt==5.3.1
+django-oauth-toolkit==2.4.0
+
+# --- Base de datos ---
+psycopg2-binary==2.9.9
+dj-database-url==2.2.0
+
+# --- Cliente HTTP para integraciones (AGA_AUTH, SIGENU, ASSET) ---
+requests==2.34.2
+
+# --- Variables de entorno ---
+python-dotenv==1.0.1
+
+# --- CORS ---
+django-cors-headers==4.4.0
+
+# --- Filtros y utilidades de API ---
+django-filter==24.3
+
+# --- Documentación de API (Swagger / OpenAPI) ---
+drf-spectacular==0.27.2
+drf-spectacular-sidecar==2024.11.1
+
+# --- Tiempo real (WebSockets) ---
+channels==4.1.0
+channels-redis==4.2.0
+daphne==4.1.2
+
+# --- Almacenamiento S3 compatible (MinIO) ---
+django-storages==1.14.4
+boto3==1.35.20
+
+# --- Exportación de documentos ---
+# WeasyPrint en Windows requiere GTK3: https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer
+WeasyPrint==62.3
+openpyxl==3.1.5
+
+# --- Servidor de producción ---
+gunicorn==23.0.0
+whitenoise==6.7.0
+
+# --- Utilidades ---
+python-decouple==3.8
+Pillow==10.4.0
+# Generación del código QR del Solapín Digital (RF-03.9)
+qrcode[pil]==8.2

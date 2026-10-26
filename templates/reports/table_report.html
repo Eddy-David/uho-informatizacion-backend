@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    @page {
+      size: A4 {% if landscape %}landscape{% else %}portrait{% endif %};
+      margin: 18mm 14mm 20mm 14mm;
+      @bottom-center {
+        content: "{{ institution_name }} · {{ app_name }} v{{ app_version }} · Página " counter(page) " de " counter(pages);
+        font-size: 8pt;
+        color: #6b7280;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "DejaVu Sans", Arial, sans-serif;
+      color: #1f2937;
+      font-size: 9pt;
+      margin: 0;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #14305C;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+    }
+    .header .brand { display: flex; align-items: center; gap: 10px; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 8px;
+      background: #14305C; color: #D9A441;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 14pt;
+    }
+    .institution { font-size: 11pt; font-weight: bold; color: #14305C; }
+    .system { font-size: 8pt; color: #6b7280; }
+    h1 { font-size: 15pt; color: #14305C; margin: 0 0 4px 0; }
+    .meta { font-size: 8pt; color: #6b7280; margin-bottom: 10px; }
+    .meta span { margin-right: 14px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #14305C; color: #fff; text-align: left;
+      padding: 6px 8px; font-size: 8pt; text-transform: uppercase;
+    }
+    tbody td { padding: 5px 8px; border-bottom: 1px solid #e5e7eb; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    .empty { padding: 24px; text-align: center; color: #6b7280; }
+    .signature { margin-top: 40px; display: flex; justify-content: space-between; }
+    .signature div { width: 45%; border-top: 1px solid #9ca3af; padding-top: 4px; font-size: 8pt; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <div class="logo">UHO</div>
+      <div>
+        <div class="institution">{{ institution_name }}</div>
+        <div class="system">{{ app_name }} · Sistema de Desarrollo para el Proceso de Informatización</div>
+      </div>
+    </div>
+    <div class="system">{{ generated_at|date:"d/m/Y H:i" }}</div>
+  </div>
+
+  <h1>{{ title }}</h1>
+  <div class="meta">
+    {% for key, value in filters.items %}<span><strong>{{ key }}:</strong> {{ value }}</span>{% endfor %}
+    <span><strong>Registros:</strong> {{ rows|length }}</span>
+  </div>
+
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>{% for header in headers %}<th>{{ header }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>{% for cell in row %}<td>{{ cell|default:"—" }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No existen datos para los filtros seleccionados.</div>
+  {% endif %}
+
+  <div class="signature">
+    <div>Elaborado por</div>
+    <div>Revisado / Aprobado por</div>
+  </div>
+</body>
+</html>

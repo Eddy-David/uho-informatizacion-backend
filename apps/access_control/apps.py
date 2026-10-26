@@ -1,0 +1,10 @@
+"""Configuración de la aplicación access_control."""
+
+from django.apps import AppConfig
+
+
+class AccessControlConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.access_control"
+    label = "access_control"
+    verbose_name = "Control de acceso"

@@ -1,0 +1,16 @@
+# =====================================================================
+# SIGACU / UHO — Dependencias de desarrollo (opcionales)
+# ---------------------------------------------------------------------
+#   pip install -r requirements-dev.txt
+# =====================================================================
+-r requirements.txt
+
+# --- Pruebas ---
+pytest==8.2.2
+pytest-django==4.8.0
+pytest-cov==5.0.0
+
+# --- Calidad de código ---
+black==24.4.2
+flake8==7.0.0
+isort==5.13.2
