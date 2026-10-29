@@ -99,7 +99,10 @@ class TestMotorVerificacion:
         badge.status = Badge.Status.EXPIRED
         badge.save(update_fields=["status"])
 
-        assert verificar_acceso(str(badge.codigo_qr)).allowed is False
+        result = verificar_acceso(str(badge.codigo_qr))
+
+        assert result.allowed is False
+        assert result.reason == DenialReason.BADGE_EXPIRED
 
     def test_usuario_inactivo_deniega(self, estudiante):
         user, badge = estudiante
@@ -183,6 +186,88 @@ class TestEndpointsRF04:
         log = AccessLog.objects.get()
         assert log.result == AccessLog.Result.DENIED
         assert log.denial_reason == "SOLAPIN_CANCELADO"
+
+    def test_verify_acepta_payload_json_del_escaner(self, estudiante, seguridad):
+        """RF-04.1: la cámara envía el JSON completo del QR, no sólo el UUID."""
+        user, badge = estudiante
+        client = APIClient()
+        client.force_authenticate(user=seguridad)
+
+        response = client.post(
+            "/api/v1/access_control/verify/",
+            {"identificador": badge.qr_payload},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["permitido"] is True
+
+    def test_sync_replica_la_hora_del_dispositivo(self, estudiante, seguridad):
+        """RF-04.6 / RNF-09: se respeta la hora real del movimiento offline."""
+        user, badge = estudiante
+        client = APIClient()
+        client.force_authenticate(user=seguridad)
+        ocurrido = timezone.now() - timedelta(hours=3)
+
+        response = client.post(
+            "/api/v1/access/sync/",
+            [
+                {
+                    "client_uuid": "11111111-2222-3333-4444-555555555555",
+                    "occurred_at": ocurrido.isoformat(),
+                    "qr_token": str(badge.codigo_qr),
+                    "movement": "ENTRADA",
+                    "campus": "CENTRAL",
+                }
+            ],
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data == {"created": 1, "skipped": 0, "denied": 0}
+        log = AccessLog.objects.get()
+        assert log.channel == AccessLog.Channel.PWA
+        assert abs((log.occurred_at - ocurrido).total_seconds()) < 2
+
+    def test_sync_no_duplica_por_client_uuid(self, estudiante, seguridad):
+        user, badge = estudiante
+        client = APIClient()
+        client.force_authenticate(user=seguridad)
+        item = {
+            "client_uuid": "66666666-7777-8888-9999-000000000000",
+            "occurred_at": timezone.now().isoformat(),
+            "qr_token": str(badge.codigo_qr),
+            "movement": "ENTRADA",
+        }
+
+        client.post("/api/v1/access/sync/", [item], format="json")
+        segundo = client.post("/api/v1/access/sync/", [item], format="json")
+
+        assert segundo.data == {"created": 0, "skipped": 1, "denied": 0}
+        assert AccessLog.objects.count() == 1
+
+    def test_sync_cuenta_los_denegados(self, estudiante, seguridad):
+        """Un solapín cancelado se sincroniza como DENEGADO, no como permiso."""
+        user, badge = estudiante
+        badge.cancel(reason="Baja")
+        client = APIClient()
+        client.force_authenticate(user=seguridad)
+
+        response = client.post(
+            "/api/v1/access/sync/",
+            [
+                {
+                    "client_uuid": "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb",
+                    "occurred_at": timezone.now().isoformat(),
+                    "qr_token": str(badge.codigo_qr),
+                    "movement": "ENTRADA",
+                }
+            ],
+            format="json",
+        )
+
+        assert response.data == {"created": 1, "skipped": 0, "denied": 1}
+        assert AccessLog.objects.get().result == AccessLog.Result.DENIED
 
     def test_register_solo_seguridad(self, estudiante):
         user, badge = estudiante

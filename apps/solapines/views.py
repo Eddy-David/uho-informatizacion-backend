@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from django.http import HttpResponse
 from django.utils import timezone as dj_timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
 from rest_framework.decorators import action
+from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -15,6 +17,7 @@ from apps.core.constants import AccessLevel, Role
 from apps.core.mixins import AuditableModelViewSet
 from apps.core.permissions import IsCredentialManager, IsSecurityDirector
 from apps.core.utils import render_qr_png
+from apps.solapines.compositor import compose_badge_image
 from apps.solapines.models import Badge, BadgePrintJob, BadgeTemplate
 from apps.solapines.serializers import (
     BadgeCancelSerializer,
@@ -26,6 +29,18 @@ from apps.solapines.serializers import (
     BadgeVerifySerializer,
 )
 from apps.solapines.services import generar_solapin
+
+
+class PNGRenderer(BaseRenderer):
+    """Renderer binario para devolver imágenes sin serializarlas como JSON."""
+
+    media_type = "image/png"
+    format = "png"
+    charset = None
+    render_style = "binary"
+
+    def render(self, data, media_type=None, renderer_context=None):
+        return data
 
 
 class BadgeTemplateViewSet(AuditableModelViewSet):
@@ -229,6 +244,49 @@ class MyBadgeView(APIView):
         badge, created = generar_solapin(request.user)
         data = BadgeSerializer(badge, context={"request": request}).data
         return Response(data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class MyBadgeImageView(APIView):
+    """Imagen final del Solapín del usuario autenticado (RF-02.3 / RF-03.3).
+
+    ``GET /api/v1/solapines/mio/imagen/?download=1``
+
+    Compone la plantilla asignada al solapín con los datos del usuario y su QR
+    (UUID + estado). Devuelve ``image/png``; con ``download=1`` se sirve como
+    adjunto para que el navegador lo descargue con un nombre legible.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    renderer_classes = [PNGRenderer]
+
+    @extend_schema(
+        summary="Imagen compuesta del Solapín (PNG)",
+        tags=["Solapín digital"],
+        parameters=[
+            OpenApiParameter(
+                "download",
+                OpenApiTypes.INT,
+                enum=[0, 1],
+                default=0,
+                description="1 = forzar descarga como adjunto.",
+            )
+        ],
+        responses={200: OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        badge, created = generar_solapin(request.user)
+        if created:
+            badge = Badge.objects.select_related("user", "template").get(pk=badge.pk)
+
+        png = compose_badge_image(badge)
+        disposition = (
+            "attachment" if request.query_params.get("download") in ("1", "true") else "inline"
+        )
+        filename = f"solapin-{badge.badge_number}.png"
+        response = HttpResponse(png, content_type="image/png")
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        response["Cache-Control"] = "private, max-age=60"
+        return response
 
 
 class BadgeVerificationView(APIView):

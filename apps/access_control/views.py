@@ -311,7 +311,7 @@ class SyncOfflineAccessView(APIView):
         serializer = SyncAccessLogItemSerializer(data=items, many=True)
         serializer.is_valid(raise_exception=True)
 
-        created, skipped = 0, 0
+        created, skipped, denied = 0, 0, 0
         for item in serializer.validated_data:
             if AccessLog.objects.filter(client_uuid=item["client_uuid"]).exists():
                 skipped += 1
@@ -321,7 +321,7 @@ class SyncOfflineAccessView(APIView):
                 if item.get("access_point")
                 else None
             )
-            verify_access(
+            result = verify_access(
                 operator=request.user,
                 movement=item["movement"],
                 qr_token=item.get("qr_token", ""),
@@ -334,10 +334,15 @@ class SyncOfflineAccessView(APIView):
                 client_uuid=item["client_uuid"],
                 device_info=item.get("device_info", ""),
                 observed=item.get("observed", ""),
+                # La hora del movimiento es la del dispositivo, no la del envío.
+                occurred_at=item["occurred_at"],
             )
-            created += 1
+            if result.log is not None:
+                created += 1
+                if not result.allowed:
+                    denied += 1
 
-        return Response({"created": created, "skipped": skipped})
+        return Response({"created": created, "skipped": skipped, "denied": denied})
 
 
 class CurrentlyInsideView(APIView):

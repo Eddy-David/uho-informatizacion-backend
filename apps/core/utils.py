@@ -38,6 +38,23 @@ def qr_payload(codigo_qr, estado: str) -> str:
     return json.dumps({"uuid": str(codigo_qr), "estado": str(estado)}, separators=(",", ":"))
 
 
+def extract_codigo_qr(identificador: str) -> str:
+    """Extrae el UUID del QR admitiendo el payload JSON o el UUID desnudo.
+
+    El escáner de la PWA (RF-04.1) lee el payload completo; el backend debe
+    aceptarlo igual que un UUID en texto plano.
+    """
+    texto = (identificador or "").strip()
+    if not texto:
+        return ""
+    if texto.startswith("{"):
+        try:
+            return str(json.loads(texto).get("uuid", "")).strip()
+        except (ValueError, AttributeError, TypeError):
+            return ""
+    return texto
+
+
 def render_qr_png(payload: str, box_size: int = 10, border: int = 2) -> bytes:
     """Renderiza el contenido del QR a PNG (bytes) con la librería ``qrcode``."""
     import qrcode

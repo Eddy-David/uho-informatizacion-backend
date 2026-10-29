@@ -12,7 +12,6 @@ tanto la web como la PWA y la app móvil compartan las mismas reglas:
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
@@ -22,7 +21,7 @@ from django.utils import timezone
 from apps.access_control.models import AccessLog
 from apps.usuarios.models import User
 from apps.core.constants import AccessLevel, MovementType
-from apps.core.utils import client_ip, normalize_identity_card
+from apps.core.utils import client_ip, extract_codigo_qr, normalize_identity_card
 from apps.solapines.models import Badge
 
 
@@ -63,17 +62,8 @@ class VerificationResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _extract_codigo_qr(identificador: str) -> str:
-    """Extrae el UUID del QR admitiendo el payload JSON o el UUID desnudo."""
-    texto = (identificador or "").strip()
-    if not texto:
-        return ""
-    if texto.startswith("{"):
-        try:
-            return str(json.loads(texto).get("uuid", "")).strip()
-        except (ValueError, AttributeError, TypeError):
-            return ""
-    return texto
+#: Alias privado por compatibilidad con pruebas y llamadas internas.
+_extract_codigo_qr = extract_codigo_qr
 
 
 def _resolve(qr_token: str = "", badge_number: str = "", identity_card: str = ""):
@@ -124,8 +114,14 @@ def verify_access(
     client_uuid=None,
     device_info: str = "",
     observed: str = "",
+    occurred_at=None,
 ) -> VerificationResult:
-    """Verifica el acceso y, si procede, registra el movimiento."""
+    """Verifica el acceso y, si procede, registra el movimiento.
+
+    :param occurred_at: hora real del movimiento cuando se lee de la cola
+        offline (RNF-09). Sin valor se usa la hora del servidor; si el reloj
+        del dispositivo está adelantado se recorta a ``ahora``.
+    """
     user, badge = _resolve(
         qr_token=qr_token, badge_number=badge_number, identity_card=identity_card
     )
@@ -148,6 +144,9 @@ def verify_access(
         denial = DenialReason.BADGE_CANCELLED
     elif badge.status == Badge.Status.SUSPENDED:
         denial = DenialReason.BADGE_SUSPENDED
+    elif badge.status == Badge.Status.EXPIRED:
+        # El estado del solapín manda aunque no tenga fecha de vencimiento.
+        denial = DenialReason.BADGE_EXPIRED
     elif badge.expires_at and badge.expires_at < now:
         denial = DenialReason.BADGE_EXPIRED
     elif badge.valid_from and badge.valid_from > now.date():
@@ -157,6 +156,12 @@ def verify_access(
     elif badge.access_level == AccessLevel.VISITOR and badge.expires_at and badge.expires_at < now:
         # Regla 3: el solapín de visitante sólo vale dentro de su vigencia.
         denial = DenialReason.BADGE_EXPIRED
+
+    logged_at = now
+    if occurred_at is not None:
+        logged_at = timezone.localtime(occurred_at)
+        if logged_at > now:
+            logged_at = now
 
     log = AccessLog.objects.create(
         user=user,
@@ -172,7 +177,7 @@ def verify_access(
         denial_reason=denial or "",
         channel=channel,
         registered_by=operator,
-        occurred_at=now,
+        occurred_at=logged_at,
         client_uuid=client_uuid,
         source_ip=client_ip(request) if request is not None else None,
         device_info=device_info[:200],

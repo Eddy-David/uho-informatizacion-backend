@@ -8,6 +8,7 @@ from apps.solapines.views import (
     BadgeTemplateViewSet,
     BadgeVerificationView,
     BadgeViewSet,
+    MyBadgeImageView,
     MyBadgeView,
 )
 
@@ -22,6 +23,10 @@ urlpatterns = [
     # RF-03: nombre oficial del endpoint; my-badge/ se conserva por compatibilidad.
     path("my-solapin/", MyBadgeView.as_view(), name="my-solapin"),
     path("my-badge/", MyBadgeView.as_view(), name="my-badge"),
+    # RF-02.3: ruta oficial consumida por el frontend (SolapinCard).
+    path("mio/", MyBadgeView.as_view(), name="my-solapin-mio"),
+    # RF-03.3: imagen final compuesta (plantilla + datos + QR).
+    path("mio/imagen/", MyBadgeImageView.as_view(), name="my-badge-image"),
     path("verify/", BadgeVerificationView.as_view(), name="verify"),
     path("", include(router.urls)),
 ]

@@ -14,3 +14,8 @@ pytest-cov==5.0.0
 black==24.4.2
 flake8==7.0.0
 isort==5.13.2
+# --- Servidor HTTPS local ---
+# `python manage.py runhttps 0.0.0.0:8000` sirve la API con certificado
+# autofirmado para probar la cámara del escáner QR desde el móvil (RF-04.1).
+# No requiere paquetes extra (ver `backend/config/https_dev.py`); es una
+# comanda de gestión que sólo se activa con la configuración `development`.

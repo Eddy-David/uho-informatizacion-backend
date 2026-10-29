@@ -123,3 +123,102 @@ class TestEndpoints:
         assert response.status_code == 200
         assert response["Content-Type"] == "image/png"
         assert response.content.startswith(b"\x89PNG")
+
+
+@pytest.mark.django_db
+class TestImagenSolapin:
+    """RF-03.3 — composición plantilla + datos + QR con Pillow."""
+
+    @staticmethod
+    def _crear_plantilla(user_type="ESTUDIANTE", imagen=False):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        from apps.solapines.models import BadgeTemplate
+
+        kwargs = {"name": f"Plantilla {user_type}", "user_type": user_type, "is_default": True}
+        if imagen:
+            buffer = BytesIO()
+            Image.new("RGB", (600, 380), (240, 240, 240)).save(buffer, format="PNG")
+            kwargs["background_image"] = SimpleUploadedFile(
+                "base.png", buffer.getvalue(), content_type="image/png"
+            )
+        return BadgeTemplate.objects.create(**kwargs)
+
+    def test_compone_png_con_plantilla(self, django_user_model):
+        from PIL import Image
+
+        self._crear_plantilla(imagen=True)
+        user = django_user_model.objects.create_user(
+            username="comp",
+            password="x",
+            nombres="Lucía",
+            apellidos="Gómez",
+            tipo_usuario="ESTUDIANTE",
+            ci="99020211223",
+        )
+        badge, _ = generar_solapin(user)
+
+        from apps.solapines.compositor import compose_badge_image
+
+        png = compose_badge_image(badge)
+
+        assert png.startswith(b"\x89PNG")
+        # Respeta el tamaño de la plantilla subida por el administrador.
+        assert Image.open(BytesIO_(png)).size == (600, 380)
+
+    def test_compone_sin_plantilla_ni_foto(self, django_user_model):
+        from apps.solapines.compositor import compose_badge_image
+
+        user = django_user_model.objects.create_user(
+            username="sinplantilla", password="x", tipo_usuario="PROFESOR"
+        )
+        badge, _ = generar_solapin(user)
+        png = compose_badge_image(badge)
+
+        assert png.startswith(b"\x89PNG")
+
+    def test_endpoint_mio_imagen(self, django_user_model):
+        self._crear_plantilla()
+        user = django_user_model.objects.create_user(
+            username="mio", password="x", tipo_usuario="ESTUDIANTE"
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get("/api/v1/solapines/mio/imagen/")
+        assert response.status_code == 200
+        assert response["Content-Type"] == "image/png"
+        assert response.content.startswith(b"\x89PNG")
+        assert "inline" in response["Content-Disposition"]
+
+        descarga = client.get("/api/v1/solapines/mio/imagen/?download=1")
+        assert "attachment" in descarga["Content-Disposition"]
+        assert ".png" in descarga["Content-Disposition"]
+
+    def test_endpoint_requiere_autenticacion(self):
+        response = APIClient().get("/api/v1/solapines/mio/imagen/")
+        assert response.status_code == 401
+
+    def test_descarga_usa_el_numero_del_solapin(self, django_user_model):
+        """RF-02.3: el archivo descargado se nombra con el dato de la base."""
+        self._crear_plantilla()
+        user = django_user_model.objects.create_user(
+            username="descarga", password="x", tipo_usuario="ESTUDIANTE"
+        )
+        badge, _ = generar_solapin(user)
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get("/api/v1/solapines/mio/imagen/?download=1")
+
+        assert badge.badge_number in response["Content-Disposition"]
+
+
+def BytesIO_(data):
+    """Atajo para abrir bytes como imagen Pillow dentro de las pruebas."""
+    from io import BytesIO
+
+    return BytesIO(data)

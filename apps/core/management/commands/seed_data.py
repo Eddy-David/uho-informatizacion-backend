@@ -397,6 +397,11 @@ class Command(BaseCommand):
                     "valid_until": timezone.localdate() + timedelta(days=670),
                 },
             )
+            # Se mantiene coherente el nivel del perfil con el del solapín
+            # (RF-03.6 / RF-03.7): ambos salen de la misma regla.
+            if user.nivel_acceso != nivel:
+                user.nivel_acceso = nivel
+                user.save(update_fields=["nivel_acceso"])
 
     def _seed_vehicles(self, campuses):
         vehicles = [
