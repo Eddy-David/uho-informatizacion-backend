@@ -12,6 +12,9 @@ router.register("requests", VisitRequestViewSet, basename="visit-request")
 router.register("visitors", VisitorViewSet, basename="visitor")
 
 urlpatterns = [
-    path("my-requests/", MyVisitRequestsView.as_view(), name="my-requests"),
+    # Rutas canónicas (inglés): requests/, pending/, approve/, reject/, etc.
+    # El frontend las consume vía `visitorService`. El endpoint en español
+    # equivalente a `PATCH {id}/estado/` es `PATCH requests/{uuid}/estado/`.
     path("", include(router.urls)),
+    path("my-requests/", MyVisitRequestsView.as_view(), name="my-requests"),
 ]

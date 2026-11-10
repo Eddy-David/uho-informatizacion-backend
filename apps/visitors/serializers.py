@@ -91,6 +91,31 @@ class VisitReviewSerializer(serializers.Serializer):
         return attrs
 
 
+class VisitEstadoSerializer(serializers.Serializer):
+    """Contrato compacto de decisión: ``{"estado": ..., "motivo": ...}``."""
+
+    ESTADOS_VALIDOS = (
+        VisitRequest.Status.APPROVED,
+        VisitRequest.Status.REJECTED,
+        VisitRequest.Status.CHANGES,
+    )
+
+    estado = serializers.ChoiceField(choices=ESTADOS_VALIDOS)
+    motivo = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_estado(self, value):
+        if value not in self.ESTADOS_VALIDOS:
+            raise serializers.ValidationError("Estado inválido. Use APROBADA, RECHAZADA o CAMBIOS.")
+        return value
+
+    def validate(self, attrs):
+        if attrs["estado"] != VisitRequest.Status.APPROVED and not attrs.get("motivo"):
+            raise serializers.ValidationError(
+                {"motivo": "Debe indicar el motivo al rechazar o solicitar cambios."}
+            )
+        return attrs
+
+
 class VisitorSerializer(serializers.ModelSerializer):
     request_code = serializers.CharField(source="visit_request.code", read_only=True)
     host_name = serializers.CharField(source="host_user.nombre_completo", read_only=True)

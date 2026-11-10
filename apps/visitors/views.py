@@ -17,6 +17,7 @@ from apps.notifications.services import notify_user
 from apps.visitors.models import Visitor, VisitRequest
 from apps.visitors.serializers import (
     VisitorSerializer,
+    VisitEstadoSerializer,
     VisitRequestSerializer,
     VisitReviewSerializer,
 )
@@ -33,7 +34,7 @@ class VisitRequestViewSet(AuditableModelViewSet):
     lookup_field = "uuid"
 
     def get_permissions(self):
-        if self.action in ("approve", "reject", "request_changes", "pending"):
+        if self.action in ("approve", "reject", "request_changes", "pending", "estado"):
             return [permissions.IsAuthenticated(), IsVisitApprover()]
         if self.action in ("create",):
             return [permissions.IsAuthenticated()]
@@ -42,7 +43,7 @@ class VisitRequestViewSet(AuditableModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
-        if self.action in ("approve", "reject", "request_changes", "pending"):
+        if self.action in ("approve", "reject", "request_changes", "pending", "estado"):
             return qs
         if user.is_superuser or user.role in (
             Role.SUPERADMIN,
@@ -89,7 +90,69 @@ class VisitRequestViewSet(AuditableModelViewSet):
         visit = self.get_object()
         serializer = VisitReviewSerializer(data={**request.data, "action": "approve"})
         serializer.is_valid(raise_exception=True)
-        visitor = visit.approve(request.user, serializer.validated_data.get("comment", ""))
+        self._ejecutar_aprobacion(request, visit, serializer.validated_data.get("comment", ""))
+        return Response(VisitRequestSerializer(visit).data)
+
+    @extend_schema(summary="Rechazar solicitud", request=VisitReviewSerializer, tags=["Visitantes"])
+    @action(detail=True, methods=["post"])
+    def reject(self, request, uuid=None):
+        visit = self.get_object()
+        serializer = VisitReviewSerializer(data={**request.data, "action": "reject"})
+        serializer.is_valid(raise_exception=True)
+        self._ejecutar_rechazo(
+            request, visit, VisitRequest.Status.REJECTED, serializer.validated_data["comment"]
+        )
+        return Response(VisitRequestSerializer(visit).data)
+
+    @extend_schema(
+        summary="Solicitar cambios en la solicitud",
+        request=VisitReviewSerializer,
+        tags=["Visitantes"],
+    )
+    @action(detail=True, methods=["post"], url_path="request-changes")
+    def request_changes(self, request, uuid=None):
+        visit = self.get_object()
+        serializer = VisitReviewSerializer(data={**request.data, "action": "request_changes"})
+        serializer.is_valid(raise_exception=True)
+        self._ejecutar_rechazo(
+            request, visit, VisitRequest.Status.CHANGES, serializer.validated_data["comment"]
+        )
+        return Response(VisitRequestSerializer(visit).data)
+
+    @extend_schema(
+        summary="Decidir estado de la solicitud",
+        request=VisitEstadoSerializer,
+        tags=["Visitantes"],
+    )
+    @action(detail=True, methods=["patch"], url_path="estado")
+    def estado(self, request, uuid=None):
+        """``PATCH /api/v1/visitors/requests/{uuid}/estado/`` (RF-05.5).
+
+        Contrato compacto: ``{"estado": "APROBADA|RECHAZADA|CAMBIOS", "motivo": "..."}``.
+        Genera el solapín temporal al aprobar (RF-05.7).
+        """
+        visit = self.get_object()
+        serializer = VisitEstadoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        estado = serializer.validated_data["estado"]
+        motivo = serializer.validated_data.get("motivo", "")
+
+        if estado == VisitRequest.Status.APPROVED:
+            self._ejecutar_aprobacion(request, visit, motivo)
+        else:
+            if estado == VisitRequest.Status.REJECTED:
+                titulo = "Solicitud de visita rechazada"
+                mensaje = f"La solicitud {visit.code} fue rechazada: {motivo}"
+            else:
+                titulo = "Cambios solicitados en su visita"
+                mensaje = f"La solicitud {visit.code} requiere cambios: {motivo}"
+            self._ejecutar_rechazo(request, visit, estado, motivo, titulo=titulo, mensaje=mensaje)
+        return Response(VisitRequestSerializer(visit).data)
+
+    # ------------------------------------------------------------------ apoyo
+    def _ejecutar_aprobacion(self, request, visit: VisitRequest, comment: str) -> None:
+        """Aprueba, crea el Visitante y emite el solapín temporal (RF-05.7)."""
+        visitor = visit.approve(request.user, comment)
         visitor = self._ensure_visitor_user(visitor)
 
         from apps.solapines.models import Badge
@@ -109,43 +172,45 @@ class VisitRequestViewSet(AuditableModelViewSet):
             category="VISITA",
             link=f"/visitors/requests/{visit.uuid}",
         )
-        return Response(VisitRequestSerializer(visit).data)
 
-    @extend_schema(summary="Rechazar solicitud", request=VisitReviewSerializer, tags=["Visitantes"])
-    @action(detail=True, methods=["post"])
-    def reject(self, request, uuid=None):
-        visit = self.get_object()
-        serializer = VisitReviewSerializer(data={**request.data, "action": "reject"})
-        serializer.is_valid(raise_exception=True)
-        visit.reject(request.user, serializer.validated_data["comment"])
+    def _ejecutar_rechazo(
+        self,
+        request,
+        visit: VisitRequest,
+        estado: str,
+        comment: str,
+        *,
+        titulo: str = "Solicitud de visita rechazada",
+        mensaje: str = "",
+    ) -> None:
+        """Rechaza o solicita cambios y notifica al solicitante."""
+        if estado == VisitRequest.Status.REJECTED:
+            visit.reject(request.user, comment)
+        else:
+            visit.request_changes(request.user, comment)
         notify_user(
             visit.requester,
-            title="Solicitud de visita rechazada",
-            message=f"La solicitud {visit.code} fue rechazada: {visit.review_comment}",
+            title=(
+                titulo
+                if titulo
+                else (
+                    "Solicitud de visita rechazada"
+                    if estado == VisitRequest.Status.REJECTED
+                    else "Cambios solicitados en su visita"
+                )
+            ),
+            message=(
+                mensaje
+                if mensaje
+                else (
+                    f"La solicitud {visit.code} fue rechazada: {comment}"
+                    if estado == VisitRequest.Status.REJECTED
+                    else f"La solicitud {visit.code} requiere cambios: {comment}"
+                )
+            ),
             category="VISITA",
             link=f"/visitors/requests/{visit.uuid}",
         )
-        return Response(VisitRequestSerializer(visit).data)
-
-    @extend_schema(
-        summary="Solicitar cambios en la solicitud",
-        request=VisitReviewSerializer,
-        tags=["Visitantes"],
-    )
-    @action(detail=True, methods=["post"], url_path="request-changes")
-    def request_changes(self, request, uuid=None):
-        visit = self.get_object()
-        serializer = VisitReviewSerializer(data={**request.data, "action": "request_changes"})
-        serializer.is_valid(raise_exception=True)
-        visit.request_changes(request.user, serializer.validated_data["comment"])
-        notify_user(
-            visit.requester,
-            title="Cambios solicitados en su visita",
-            message=f"La solicitud {visit.code} requiere cambios: {visit.review_comment}",
-            category="VISITA",
-            link=f"/visitors/requests/{visit.uuid}",
-        )
-        return Response(VisitRequestSerializer(visit).data)
 
     @staticmethod
     def _ensure_visitor_user(visitor: Visitor):
