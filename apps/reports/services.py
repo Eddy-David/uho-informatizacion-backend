@@ -88,6 +88,10 @@ def dashboard_summary() -> dict:
             item["campus"] or "SIN_SEDE": item["total"]
             for item in access_today.values("campus").annotate(total=Count("id"))
         },
+        "by_user_type": {
+            item["user_type"] or "DESCONOCIDO": item["total"]
+            for item in access_today.values("user_type").annotate(total=Count("id"))
+        },
         "by_hour": {
             str(item["hour"]): item["total"]
             for item in access_today.annotate(hour=ExtractHour("occurred_at"))
