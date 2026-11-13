@@ -45,6 +45,9 @@ boto3==1.35.20
 # --- Exportación de documentos ---
 # WeasyPrint en Windows requiere GTK3: https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer
 WeasyPrint==62.3
+# WeasyPrint 62.3 exige pydyf>=0.10,<0.11; con 0.11+ los PDF fallan con
+# "'super' object has no attribute 'transform'" en la generación del stream.
+pydyf==0.10.0
 openpyxl==3.1.5
 
 # --- Servidor de producción ---

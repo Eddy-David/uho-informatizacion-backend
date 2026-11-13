@@ -11,7 +11,13 @@ from apps.access_control.models import AccessLog
 from apps.core.constants import Role
 from apps.core.exports import export_to_excel, export_to_pdf
 from apps.core.permissions import HasRole
-from apps.reports.services import REPORT_TYPES, build_report, dashboard_summary, parse_dates
+from apps.reports.services import (
+    REPORT_TYPES,
+    build_report,
+    dashboard_summary,
+    parse_dates,
+    report_filters,
+)
 
 
 class IsReportViewer(HasRole):
@@ -49,13 +55,15 @@ class ReportView(APIView):
                 {"detail": f"Reporte inválido. Opciones: {', '.join(REPORT_TYPES)}"}, status=400
             )
         date_from, date_to = parse_dates(request)
-        data = build_report(report_type, date_from, date_to, request.query_params.get("campus", ""))
+        campus = request.query_params.get("campus", "")
+        data = build_report(report_type, date_from, date_to, campus)
         return Response(
             {
                 "report": report_type,
                 "label": REPORT_TYPES[report_type],
                 "date_from": date_from,
                 "date_to": date_to,
+                "filters": report_filters(date_from, date_to, campus),
                 **data,
             }
         )
@@ -72,12 +80,13 @@ class ReportExportExcelView(APIView):
         if report_type not in REPORT_TYPES:
             return Response({"detail": "Reporte inválido."}, status=400)
         date_from, date_to = parse_dates(request)
-        data = build_report(report_type, date_from, date_to, request.query_params.get("campus", ""))
+        campus = request.query_params.get("campus", "")
+        data = build_report(report_type, date_from, date_to, campus)
         return export_to_excel(
             title=data["title"],
             headers=data["headers"],
             rows=data["rows"],
-            metadata={"Desde": date_from, "Hasta": date_to},
+            metadata=report_filters(date_from, date_to, campus),
         )
 
 
@@ -92,13 +101,14 @@ class ReportExportPdfView(APIView):
         if report_type not in REPORT_TYPES:
             return Response({"detail": "Reporte inválido."}, status=400)
         date_from, date_to = parse_dates(request)
-        data = build_report(report_type, date_from, date_to, request.query_params.get("campus", ""))
+        campus = request.query_params.get("campus", "")
+        data = build_report(report_type, date_from, date_to, campus)
         return export_to_pdf(
             title=data["title"],
             context={
                 "headers": data["headers"],
                 "rows": data["rows"],
-                "filters": {"Desde": date_from, "Hasta": date_to},
+                "filters": report_filters(date_from, date_to, campus),
             },
         )
 

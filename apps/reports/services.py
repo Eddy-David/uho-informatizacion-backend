@@ -21,6 +21,7 @@ REPORT_TYPES = {
     "access-by-day": "Accesos por día",
     "access-by-hour": "Accesos por hora",
     "access-by-campus": "Accesos por sede",
+    "access-detail": "Registro de accesos",
     "access-denied": "Accesos denegados",
     "users-by-type": "Usuarios por tipo",
     "visits": "Solicitudes de visita",
@@ -146,6 +147,25 @@ def build_report(report_type: str, date_from: date, date_to: date, campus: str =
             "rows": [[r["campus"] or "Sin sede", r["total"]] for r in data],
         }
 
+    if report_type == "access-detail":
+        # Listado de movimientos (no agregado). La fecha se formatea aquí para
+        # que la pantalla, el PDF y el Excel muestren exactamente el mismo valor.
+        # Mismo orden que la bitácora (RF-04.5) para facilitar la conciliación.
+        data = access_qs.order_by("-occurred_at")
+        return {
+            "title": "Registro de accesos",
+            "headers": ["Fecha", "Persona", "Sede", "Tipo de movimiento"],
+            "rows": [
+                [
+                    timezone.localtime(r.occurred_at).strftime("%Y-%m-%d %H:%M"),
+                    r.full_name,
+                    r.campus or "Sin sede",
+                    r.get_movement_display(),
+                ]
+                for r in data
+            ],
+        }
+
     if report_type == "access-denied":
         data = access_qs.filter(result=AccessLog.Result.DENIED).order_by("-occurred_at")[:5000]
         return {
@@ -185,7 +205,7 @@ def build_report(report_type: str, date_from: date, date_to: date, campus: str =
                     r.code,
                     r.visitor_name,
                     r.visitor_identity_card,
-                    r.campus,
+                    r.campus or "Sin sede",
                     r.area,
                     r.valid_from,
                     r.valid_until,
@@ -201,12 +221,14 @@ def build_report(report_type: str, date_from: date, date_to: date, campus: str =
         ).order_by("-occurred_at")
         if campus:
             data = data.filter(campus=campus)
+        # La fecha se formatea con el mismo criterio que el listado de accesos
+        # (``access-detail``): así la pantalla, el PDF y el Excel coinciden.
         return {
             "title": "Movimientos vehiculares",
             "headers": ["Fecha", "Placa", "Tipo", "Movimiento", "Autorizado", "Sede"],
             "rows": [
                 [
-                    timezone.localtime(r.occurred_at).replace(tzinfo=None),
+                    timezone.localtime(r.occurred_at).strftime("%Y-%m-%d %H:%M"),
                     r.plate,
                     r.vehicle_type,
                     r.get_movement_display(),
@@ -240,3 +262,16 @@ def build_report(report_type: str, date_from: date, date_to: date, campus: str =
         }
 
     raise ValueError(f"Tipo de reporte no soportado: {report_type}")
+
+
+def report_filters(date_from: date, date_to: date, campus: str = "") -> dict:
+    """Filtros aplicados, en el mismo formato para la pantalla y las exportaciones."""
+    from apps.core.catalogs import CampusSite
+
+    sede = "Todas"
+    if campus:
+        sede = (
+            CampusSite.objects.filter(code=campus).values_list("name", flat=True).first() or campus
+        )
+    # La plantilla del PDF da formato a las fechas: se envían como ``date``.
+    return {"Desde": date_from, "Hasta": date_to, "Sede": sede}

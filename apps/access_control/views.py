@@ -162,13 +162,15 @@ class AccessLogViewSet(viewsets.ReadOnlyModelViewSet):
                         timezone.localtime(log.occurred_at).strftime("%Y-%m-%d %H:%M"),
                         log.full_name,
                         log.identity_card,
-                        log.campus,
+                        log.campus or "Sin sede",
                         log.get_movement_display(),
                         log.get_result_display(),
                     ]
                     for log in logs
                 ],
-                "filters": {k: v for k, v in request.query_params.items()},
+                # Las fechas viajan como ``date`` para que la plantilla las
+                # formatee dd/mm/aaaa, igual que la pantalla.
+                "filters": _export_filters(request),
             },
         )
 
@@ -200,6 +202,22 @@ class AccessLogViewSet(viewsets.ReadOnlyModelViewSet):
                 "by_user_type": by_type,
             }
         )
+
+
+def _export_filters(request) -> dict:
+    """Filtros aplicados a la exportación, con el formato de la plantilla PDF."""
+    filters: dict = {}
+    date_from = request.query_params.get("date_from")
+    date_to = request.query_params.get("date_to")
+    if date_from and date_to:
+        filters = {"Desde": date_from, "Hasta": date_to}
+    elif date_from:
+        filters = {"Desde": date_from}
+    elif date_to:
+        filters = {"Hasta": date_to}
+    if request.query_params.get("result"):
+        filters["Resultado"] = request.query_params["result"]
+    return filters
 
 
 class VerifyAccessControlView(APIView):
