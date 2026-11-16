@@ -4,6 +4,27 @@ API REST construida con **Django 4.2 + Django REST Framework**, con
 autenticación JWT/OAuth2, WebSockets (Channels), almacenamiento MinIO y
 exportaciones PDF/Excel.
 
+# Usuarios y roles: 
+
+yusimi.perez  Superadministrador Acceso total. 
+Para probar la configuración global. 
+
+raul.ramirez Administrador
+Para probar los nomencladores (Sedes, Áreas), gestión de usuarios y auditoría. 
+
+eddy.fonseca Director de Seguridad Para probar la configuración del Solapín, reportes globales y la bandeja de visitas. 
+
+maite.rodriguez Personal de Seguridad El más importante para la demo. Para probar la verificación QR, registrar vehículos y crear incidencias. 
+
+osmani.vargas Aprobador de Visitas Para probar la bandeja de aprobación de visitantes. 
+
+lourdes.columbie Cuadro / Directivo Para probar la creación de solicitudes de visita. 
+
+diosbel.tamayo Estudiante Para probar el perfil de estudiante y ver su Solapín digital. 
+
+Contraseñas : Sigacu2026*
+
+
 ## Ejecución rápida
 
 ```bash
