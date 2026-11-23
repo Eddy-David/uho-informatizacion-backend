@@ -56,15 +56,25 @@ def _openssl_certificate(directory, hosts):
     """Genera cert.pem/key.pem con openssl (sin dependencias adicionales)."""
     certfile = os.path.join(directory, "cert.pem")
     keyfile = os.path.join(directory, "key.pem")
-    san = ",".join(
-        f"IP:{host}" if _is_ip(host) else f"DNS:{host}" for host in hosts
-    )
+    san = ",".join(f"IP:{host}" if _is_ip(host) else f"DNS:{host}" for host in hosts)
     subprocess.run(
         [
-            "openssl", "req", "-x509", "-nodes", "-days", "365", "-newkey", "rsa:2048",
-            "-keyout", keyfile, "-out", certfile,
-            "-subj", "/CN=SIGACU desarrollo",
-            "-addext", f"subjectAltName={san}",
+            "openssl",
+            "req",
+            "-x509",
+            "-nodes",
+            "-days",
+            "365",
+            "-newkey",
+            "rsa:2048",
+            "-keyout",
+            keyfile,
+            "-out",
+            certfile,
+            "-subj",
+            "/CN=SIGACU desarrollo",
+            "-addext",
+            f"subjectAltName={san}",
         ],
         check=True,
         capture_output=True,
@@ -77,9 +87,7 @@ def build_ssl_context(certfile=None, keyfile=None):
     if not certfile:
         directory = os.path.join(tempfile.gettempdir(), "sigacu-certs")
         os.makedirs(directory, exist_ok=True)
-        certfile, keyfile = _openssl_certificate(
-            directory, ["localhost", "127.0.0.1", _lan_ip()]
-        )
+        certfile, keyfile = _openssl_certificate(directory, ["localhost", "127.0.0.1", _lan_ip()])
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     return context, certfile
@@ -113,9 +121,7 @@ class Command(RunserverCommand):
         parser.add_argument("--keyfile", help="Clave privada PEM (por defecto autofirmada).")
 
     def handle(self, *args, **options):
-        self.server_cls, certfile = init_https(
-            options.get("certfile"), options.get("keyfile")
-        )
+        self.server_cls, certfile = init_https(options.get("certfile"), options.get("keyfile"))
         self.stdout.write(self.style.SUCCESS(f"Certificado: {certfile}"))
         self.stdout.write(
             self.style.WARNING(

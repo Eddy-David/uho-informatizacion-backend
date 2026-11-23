@@ -70,9 +70,12 @@ class UhoAuthKitTests(TestCase):
         self.assertEqual(headers["Authorization"], "AGA token-de-prueba")
 
     def test_uho_login_without_token_raises(self):
-        with override_settings(
-            UHO_INTEGRATIONS={"AGA_AUTH": {"enabled": True, "base_url": "", "token": ""}}
-        ), mock.patch.dict("os.environ", {"AGA_AUTH_TOKEN": "", "UHO_API_KEY": ""}):
+        with (
+            override_settings(
+                UHO_INTEGRATIONS={"AGA_AUTH": {"enabled": True, "base_url": "", "token": ""}}
+            ),
+            mock.patch.dict("os.environ", {"AGA_AUTH_TOKEN": "", "UHO_API_KEY": ""}),
+        ):
             with self.assertRaises(RuntimeError):
                 uho_login("usuario", "clave")
 

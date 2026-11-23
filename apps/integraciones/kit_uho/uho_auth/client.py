@@ -65,15 +65,10 @@ def uho_login(username, password, timeout=None):
       ``activeUser.account_info``.
     """
     base_url = (
-        _setting("base_url")
-        or os.environ.get("UHO_AUTH_URL", "")
-        or DEFAULT_AUTH_BASE_URL
+        _setting("base_url") or os.environ.get("UHO_AUTH_URL", "") or DEFAULT_AUTH_BASE_URL
     ).rstrip("/")
     origin = _setting("origin") or os.environ.get("UHO_AUTH_ORIGIN", DEFAULT_AUTH_ORIGIN)
-    api_key = (
-        _setting("token")
-        or os.environ.get("UHO_API_KEY", "")
-    )
+    api_key = _setting("token") or os.environ.get("UHO_API_KEY", "")
     if not api_key:
         raise RuntimeError(
             "Falta el token de AGA_AUTH. Defina AGA_AUTH_TOKEN (o UHO_API_KEY) "

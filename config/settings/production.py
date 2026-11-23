@@ -22,8 +22,8 @@ if SECRET_KEY in _INSEGURAS or len(SECRET_KEY) < 32:  # noqa: F405
     raise RuntimeError(
         "DJANGO_SECRET_KEY no está configurada (o es el valor de ejemplo). "
         "Genere una clave segura antes de iniciar en producción:\n"
-        "  python -c \"from django.core.management.utils import get_random_secret_key; "
-        "print(get_random_secret_key())\""
+        '  python -c "from django.core.management.utils import get_random_secret_key; '
+        'print(get_random_secret_key())"'
     )
 
 # Correo: si EMAIL_HOST no está definido se usa la consola (evita fallos SMTP

@@ -32,7 +32,6 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.access_control.models import AccessLog
-from apps.usuarios.models import User
 from apps.core.catalogs import (
     AccessPoint,
     CampusSite,
@@ -41,9 +40,10 @@ from apps.core.catalogs import (
     OrganizationalUnit,
 )
 from apps.core.constants import AccessLevel, Campus, MovementType, Role, UserType
-from apps.solapines.models import Badge, BadgeTemplate
 from apps.incidents.models import Incident
 from apps.notifications.models import Notification
+from apps.solapines.models import Badge, BadgeTemplate
+from apps.usuarios.models import User
 from apps.vehicles.models import AuthorizedVehicle, VehicleMovement
 from apps.visitors.models import VisitRequest
 

@@ -69,11 +69,13 @@ class KitLoginView(APIView):
             return failed
 
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({
-            "token": token.key,
-            "username": user.username,
-            "is_staff": user.is_staff,
-        })
+        return Response(
+            {
+                "token": token.key,
+                "username": user.username,
+                "is_staff": user.is_staff,
+            }
+        )
 
 
 class KitLogoutView(APIView):

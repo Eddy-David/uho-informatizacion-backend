@@ -1,22 +1,64 @@
+# =====================================================================
+# SIGACU / UHO — .gitignore del BACKEND (Django)
+# =====================================================================
+# ---------------------------------------------------------------------
 # Entorno virtual
+# ---------------------------------------------------------------------
 .venv/
 venv/
+ENV/
 env/
 
+# ---------------------------------------------------------------------
 # Python
-_pycache_/
+# ---------------------------------------------------------------------
+__pycache__/
 *.py[cod]
-*.sqlite3
+*$py.class
+*.so
 
-# Variables de entorno
+# ---------------------------------------------------------------------
+# Variables de entorno (secretos). Se conserva la plantilla .env.example
+# ---------------------------------------------------------------------
 .env
 .env.local
+.env.*.local
+!.env.example
 
-# Archivos estáticos y media
+# ---------------------------------------------------------------------
+# Base de datos local (PostgreSQL es la base oficial; esto cubre pruebas
+# locales accidentales)
+# ---------------------------------------------------------------------
+*.sqlite3
+db.sqlite3
+db.sqlite3-journal
+
+# ---------------------------------------------------------------------
+# Archivos estáticos, media y logs
+# ---------------------------------------------------------------------
 staticfiles/
 media/
-
-# Logs y temporales
-.run/
+logs/
 *.log
+
+# ---------------------------------------------------------------------
+# Cachés de herramientas de calidad
+# ---------------------------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# ---------------------------------------------------------------------
+# Datos locales de ejecución / SO / editores
+# ---------------------------------------------------------------------
+.run/
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/

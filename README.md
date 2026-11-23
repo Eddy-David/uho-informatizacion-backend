@@ -1,48 +1,114 @@
 # Backend — SIGACU · Universidad de Holguín
 
-API REST del **SIGACU (Sistema de Gestión de Acceso al Campus Universitario)**.
-Construida con **Django 4.2 + Django REST Framework**, con autenticación
-JWT/OAuth2, WebSockets (Channels), auditoría inmutable, almacenamiento MinIO y
-exportaciones PDF/Excel.
+API REST del **Development System for an Informatization Process for the
+University of Holguín (UHO)** — SIGACU. Construida con **Django 4.2 + Django
+REST Framework** (JWT/OAuth2, WebSockets con Channels, auditoría inmutable,
+almacenamiento MinIO y exportaciones PDF/Excel).
 
-La fuente de verdad funcional es el **Documento de Requerimientos v1.0 (junio
-2026)** — citado abajo como «requisitos» — junto con el mockup interactivo. Este
-README explica cómo está implementado cada requisito, qué está verificado y qué
-queda pendiente; no sustituye a ese documento.
+> Este repositorio contiene **solo el backend**. La interfaz está en
+> [`uho-informatizacion-frontend`](https://github.com/Eddy-David/uho-informatizacion-frontend).
+> Lee primero el [README del proyecto completo](https://github.com/Eddy-David/uho-informatizacion-backend#readme)
+> si quieres la puesta en marcha de los dos juntos con Docker.
 
-- [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — capas, modelo de datos, seguridad, despliegue.
-- [docs/API.md](../docs/API.md) — referencia de endpoints. Swagger: <http://localhost:8000/api/docs/>.
-- [docs/RBAC.md](../docs/RBAC.md) — roles y permisos. Es la referencia única del modelo de autorización.
-- [docs/ROADMAP_MODULOS.md](../docs/ROADMAP_MODULOS.md) — hoja de ruta de los módulos universitarios.
+## 🚀 Inicio rápido
 
----
-
-## 1. Ejecución rápida
-
-Requisitos: **Python 3.12**, **PostgreSQL 12+** y, solo para los PDF,
-**WeasyPrint con sus librerías nativas** (Pango/Cairo; en Ubuntu
+**Requisitos:** Python 3.10+ (recomendado 3.12), PostgreSQL 16 y, solo para los
+PDF, WeasyPrint con sus librerías nativas (Pango/Cairo; en Ubuntu
 `libpango-1.0-0 libpangoft2-1.0-0 libcairo2`). Sin ellas el endpoint de PDF
-responde `503` con un mensaje explicativo en lugar de fallar en silencio.
+responde `503` con un mensaje explicativo.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+# 1. Base de datos (una sola vez)
+sudo -u postgres psql -c "CREATE USER uho_sigacu WITH PASSWORD 'cambiame_password_seguro';"
+sudo -u postgres psql -c "CREATE DATABASE uho_sigacu OWNER uho_sigacu;"
+
+# 2. Entorno y dependencias
+cp .env.example .env
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp ../.env.example ../.env         # ajuste credenciales (base de datos, secretos)
-python manage.py migrate
-python manage.py seed_data         # sedes, plantillas, usuarios y datos demo
-python manage.py runserver         # ASGI (Daphne): HTTP + WebSockets
+# 3. Comando mágico: migraciones + roles + sedes + usuarios demo + accesos
+python manage.py seed_data
+
+# 4. Servidor de desarrollo
+python manage.py runserver        # http://localhost:8000
 ```
+
+Opciones de `seed_data`: `--reset` (borra y recrea los datos demo) y
+`--no-demo` (solo roles, sedes y usuarios). Es **idempotente**: repetirlo no
+duplica registros.
 
 - API: <http://localhost:8000/api/v1/>
 - Swagger / OpenAPI: <http://localhost:8000/api/docs/> · <http://localhost:8000/api/schema/>
 - Admin de Django: <http://localhost:8000/admin/>
 
-Usuarios demo de `seed_data` (contraseña **`Sigacu2026*`**), uno por rol:
-`yusimi.perez` (SA), `raul.ramirez` (ADM), `eddy.fonseca` (DSP),
-`maite.rodriguez` (SEG), `osmani.vargas` (AV), `lourdes.columbie` (CUADRO),
-`diosbel.tamayo` / `maricel.borges` (usuarios generales).
+### Docker
+
+```bash
+docker compose -f docker/docker-compose.yml up -d --build   # si usas el monorepo
+```
+
+En el primer arranque el contenedor ejecuta `migrate`, `seed_data`,
+`collectstatic` y crea el superusuario; en reinicios posteriores no vuelve a
+sembrar datos.
+
+### Credenciales de prueba
+
+Todos los usuarios demo comparten la contraseña `Sigacu2026*`:
+`yusimi.perez` (superadministrador), `raul.ramirez` (administrador),
+`eddy.fonseca` (director de seguridad), `maite.rodriguez` (seguridad),
+`osmani.vargas` (aprobador de visitas), `lourdes.columbie` (cuadro),
+`diosbel.tamayo` (estudiante), `maricel.borges` (profesor).
+
+> ⚠️ Solo para pruebas. En producción cambie las claves, regenere
+> `DJANGO_SECRET_KEY` y use `SEED_DATA=false`.
+
+## 🔐 Integraciones institucionales (RNF-11)
+
+El **uho-auth-kit** está integrado en [`apps/integraciones/kit_uho/`](apps/integraciones/kit_uho/).
+Para conectar AGA_AUTH, SIGENU o ASSET con las credenciales reales **solo se
+cambia el `.env`**:
+
+```dotenv
+AGA_AUTH_ENABLED=True
+AGA_AUTH_MODE=real
+AGA_AUTH_BASE_URL=https://auth.uho.edu.cu
+AGA_AUTH_TOKEN=<token entregado por la UHO>
+AGA_AUTH_ORIGIN=https://auth.uho.edu.cu
+```
+
+Guía: [`docs/INTEGRACION_UHO.md`](../docs/INTEGRACION_UHO.md).
+
+## 🧪 Pruebas
+
+```bash
+pytest                     # todas (PostgreSQL; crea test_uho_sigacu)
+pytest apps/core/tests     # seed_data y health
+```
+
+## 📚 Documentación
+
+- [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — capas, modelo de datos, seguridad, despliegue.
+- [docs/API.md](../docs/API.md) — referencia de endpoints. Swagger: <http://localhost:8000/api/docs/>.
+- [docs/RBAC.md](../docs/RBAC.md) — roles y permisos.
+- [docs/INTEGRACION_UHO.md](../docs/INTEGRACION_UHO.md) — AGA_AUTH, SIGENU, ASSET.
+- [docs/ROADMAP_MODULOS.md](../docs/ROADMAP_MODULOS.md) — hoja de ruta de los módulos universitarios.
+
+---
+
+<!-- El resto de este README documenta la implementación de cada requisito. -->
+
+# Implementación por requisito
+
+## 1. Requisitos del entorno
+
+Versiones soportadas: **Python 3.10+** (recomendado 3.12), **PostgreSQL 16** y,
+para los PDF, **WeasyPrint con sus librerías nativas** (Pango/Cairo; en Ubuntu
+`libpango-1.0-0 libpangoft2-1.0-0 libcairo2`). Sin ellas el endpoint de PDF
+responde `503` con un mensaje explicativo en lugar de fallar en silencio.
+
+La puesta en marcha está en el [Inicio rápido](#-inicio-rápido) de arriba;
+después del `seed_data` el backend queda listo, sin pasos adicionales.
 
 > **El servidor de desarrollo requiere ASGI** (`runserver` ya arranca Daphne en
 > este proyecto) para que funcionen los WebSockets de notificaciones. En
@@ -52,7 +118,7 @@ Usuarios demo de `seed_data` (contraseña **`Sigacu2026*`**), uno por rol:
 
 | Comando | Descripción |
 |---|---|
-| `python manage.py seed_data` | Datos demo: sedes, unidades, plantillas, usuarios por rol, solapines y accesos |
+| `python manage.py seed_data` | Comando mágico: migra, sincroniza roles y crea sedes, plantillas, usuarios por rol, solapines, accesos y datos demo |
 | `python manage.py seed_data --reset` | Borra y recrea los datos demo |
 | `python manage.py sync_roles --force` | Restablece la matriz rol → permisos por defecto (RBAC) |
 | `python manage.py generar_accesos_demo` | Genera bitácora de accesos de ejemplo para los reportes |
