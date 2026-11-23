@@ -7,6 +7,10 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
+    # ``python manage.py test`` usa el entorno de pruebas (PostgreSQL + hasher
+    # rápido), igual que pytest; y ``test`` debe poder crear su base de datos.
+    if len(sys.argv) > 1 and sys.argv[1] in {"test", "pytest"}:
+        os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings.testing"
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

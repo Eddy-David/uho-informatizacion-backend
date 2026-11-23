@@ -88,14 +88,20 @@ def _cloudflare_tunnel_origins() -> list[str]:
     return origenes
 
 
+# Hosts fijos: local, comodín para acceso por IP de la LAN (móvil), alias del
+# contenedor backend y túneles HTTPS. No se codifica ninguna IP de máquina.
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
     "0.0.0.0",
-    # IP de la laptop en la red local (acceso desde el móvil por WiFi).
-    "192.168.1.27","*",
+    # Acceso desde un móvil por la IP de la red local (la IP es la del equipo
+    # que ejecuta el proyecto, por eso el comodín; sólo aplica a DEBUG).
+    "*",
     # Alias del contenedor backend en Docker Compose.
     "backend",
+    # Orígenes extra (p. ej. una IP fija de la LAN o un dominio de túnel):
+    # DJANGO_EXTRA_ALLOWED_HOSTS=192.168.1.50,misigacu.uho.edu.cu
+    *env_list("DJANGO_EXTRA_ALLOWED_HOSTS", ""),
     # Túneles HTTPS de desarrollo (sólo si están configurados; sin túneles la
     # lista queda igual que antes).
     *_tunnel_hosts("TUNNEL_BACKEND_URL", "TUNNEL_FRONTEND_URL"),
@@ -106,17 +112,19 @@ ALLOWED_HOSTS = [
 # Se puede restringir con CORS_ALLOW_ALL_ORIGINS=false en .env o al arrancar.
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", True)
 
-# Orígenes explícitos permitidos: navegador local y móvil en la red WiFi.
+# Orígenes explícitos permitidos: navegador local, red WiFi (móvil) y túneles.
 # `CORS_ALLOW_ALL_ORIGINS` ya los cubre, pero se declaran para que funcione
 # igual si esa opción se desactiva con `CORS_ALLOW_ALL_ORIGINS=false`.
+# Las IPs de la LAN no se codifican: use CORS_ALLOW_ALL_ORIGINS=true (por
+# defecto en desarrollo) o declare la IP en SIGACU_EXTRA_CORS_ORIGINS.
 CORS_ALLOWED_ORIGINS = [
     # Vite sirve el frontend por HTTP estándar (runserver no soporta HTTPS).
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    # Acceso desde el móvil por la IP de la red local.
-    "http://192.168.1.27:5173",
-    "http://192.168.1.27:5174",
-    # Orígenes extra (p. ej. un túnel fijo de ngrok): lista separada por comas.
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    # Orígenes extra (p. ej. una IP fija de la LAN o un túnel de ngrok): lista
+    # separada por comas, p. ej. http://192.168.1.50:5173
     # `scripts/tuneles.sh` exporta TUNNEL_FRONTEND_URL, que se añade aquí abajo.
     *env_list("SIGACU_EXTRA_CORS_ORIGINS", ""),
     # Cloudflare Tunnel (https://xxxx.trycloudflare.com): cada ejecución de
@@ -142,10 +150,10 @@ CORS_ALLOWED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS))
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://192.168.1.27:5173",
-    "http://192.168.1.27:5174",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
     "http://localhost:8000",
-    "http://192.168.1.27:8000",
+    "http://127.0.0.1:8000",
     # Cloudflare Tunnel: dominios trycloudflare.com (ver nota en
     # CORS_ALLOWED_ORIGINS más arriba).
     *_cloudflare_tunnel_origins(),

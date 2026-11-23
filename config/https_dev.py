@@ -30,13 +30,18 @@ from django.core.servers.basehttp import ThreadedWSGIServer
 
 
 def _lan_ip():
-    """IP de la laptop en la red WiFi (sin enviar tráfico real)."""
+    """IP del equipo en la red local (sin enviar tráfico real).
+
+    Se descubre abriendo un socket UDP hacia una dirección cualquiera: el
+    sistema resuelve la salida y no se envía ningún paquete. Sin red devuelve
+    ``127.0.0.1``, de modo que no se codifica la IP de ninguna máquina.
+    """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.connect(("192.168.1.1", 80))
+            sock.connect(("8.8.8.8", 80))
             return sock.getsockname()[0]
     except OSError:
-        return "192.168.1.27"
+        return "127.0.0.1"
 
 
 def _is_ip(value):

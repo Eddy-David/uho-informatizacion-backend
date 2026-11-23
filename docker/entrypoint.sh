@@ -4,11 +4,16 @@
 # ---------------------------------------------------------------------
 # 1. Espera a que PostgreSQL esté disponible.
 # 2. Aplica migraciones.
-# 3. Carga datos iniciales (solo si SEED_DATA=true).
+# 3. Carga datos iniciales solo en el PRIMER arranque (SEED_DATA=true y la base
+#    de datos aún vacía); así ``docker compose restart`` conserva los datos.
 # 4. Recolecta archivos estáticos (solo en producción).
 # 5. Cede el control al comando recibido (Gunicorn / Daphne / runserver).
 # =====================================================================
 set -e
+
+if [ -z "${DJANGO_SETTINGS_MODULE}" ]; then
+  export DJANGO_SETTINGS_MODULE=config.settings.production
+fi
 
 echo "⏳ [entrypoint] Esperando a PostgreSQL en ${POSTGRES_HOST}:${POSTGRES_PORT}…"
 until nc -z "${POSTGRES_HOST}" "${POSTGRES_PORT}"; do
@@ -20,8 +25,22 @@ echo "🔧 [entrypoint] Aplicando migraciones…"
 python manage.py migrate --noinput
 
 if [ "${SEED_DATA:-false}" = "true" ]; then
-  echo "🌱 [entrypoint] Cargando datos iniciales…"
-  python manage.py seed_data || echo "⚠️  seed_data falló (probablemente ya existen datos)."
+  FIRST_BOOT=$(python - <<'PYEOF'
+import django
+
+django.setup()
+
+from django.contrib.auth import get_user_model
+
+print("1" if not get_user_model().objects.exists() else "0")
+PYEOF
+  )
+  if [ "${FIRST_BOOT}" = "1" ]; then
+    echo "🌱 [entrypoint] Primer arranque: cargando datos iniciales (seed_data)…"
+    python manage.py seed_data
+  else
+    echo "⏭️  [entrypoint] La base de datos ya tiene usuarios: no se vuelve a sembrar."
+  fi
 fi
 
 if [ "${COLLECT_STATIC:-false}" = "true" ]; then

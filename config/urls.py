@@ -9,7 +9,10 @@ Esquema de URLs::
     /api/schema/                 → Esquema OpenAPI (YAML)
     /oauth/                      → Endpoints OAuth2 (django-oauth-toolkit)
     /ws/notifications/           → WebSocket de notificaciones (Channels)
+    /api/v1/integraciones/kit/   → uho-auth-kit (solo con UHO_KIT_ENABLED=true)
 """
+
+import os
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -47,6 +50,14 @@ api_v1_patterns = [
     path("research/", include("apps.research.urls")),
     path("analytics/", include("apps.analytics.urls")),
 ]
+
+# uho-auth-kit: rutas de referencia (Token DRF) sobre auth.uho.edu.cu.
+# Desactivadas por defecto para no duplicar la autenticación JWT del SIGACU.
+# Ver docs/INTEGRACION_UHO.md.
+if os.getenv("UHO_KIT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on", "si"}:
+    api_v1_patterns.append(
+        path("integraciones/", include("apps.integraciones.kit_uho.urls")),
+    )
 
 urlpatterns = [
     path("admin/", admin.site.urls),

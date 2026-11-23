@@ -24,9 +24,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # backend/
 PROJECT_ROOT = BASE_DIR.parent  # raíz del repositorio
 
 # Se cargan primero el .env de la raíz (compartido con Docker Compose) y
-# después el .env propio del backend, si existe (este último tiene prioridad).
+# después el .env propio del backend (este último tiene prioridad), PERO las
+# variables que ya vienen del entorno real (consola, Docker) mandan siempre:
+# así, con un backend/.env de desarrollo nunca se enmascara la configuración
+# de producción ni los flags que exporta un test.
+_environment_before_dotenv = dict(os.environ)
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 load_dotenv(BASE_DIR / ".env", override=True)
+os.environ.update(_environment_before_dotenv)
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +445,10 @@ UHO_INTEGRATIONS = {
     "AGA_AUTH": {
         "enabled": env_bool("AGA_AUTH_ENABLED", False),
         "base_url": env("AGA_AUTH_BASE_URL", ""),
+        # Token y Origin del contrato de AGA_AUTH (requisitos §9). Se entregan
+        # con las credenciales reales; nunca se versionan (RNF-11).
+        "token": env("AGA_AUTH_TOKEN", env("UHO_API_KEY", "")),
+        "origin": env("AGA_AUTH_ORIGIN", ""),
         "timeout": env_int("AGA_AUTH_TIMEOUT", 5),
     },
     "SIGENU": {
@@ -489,6 +498,11 @@ LOGGING = {
             "level": env("APP_LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        "apps.integraciones": {
+            "handlers": ["console"],
+            "level": env("APP_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
     },
 }
 
@@ -513,8 +527,13 @@ AUDIT_ENABLED = env_bool("AUDIT_ENABLED", True)
 # Integración AGA_AUTH (autenticación centralizada)
 # ---------------------------------------------------------------------------
 # ``mock``  → desarrollo: acepta cualquier usuario/contraseña no vacíos.
-# ``real``  → producción: pendiente de implementar (AgaAuthClient._authenticate_remote).
+# ``real``  → se valida contra ``AGA_AUTH_BASE_URL`` con ``AGA_AUTH_TOKEN``
+#             (AgaAuthClient._authenticate_remote).
 AGA_AUTH_MODE = env("AGA_AUTH_MODE", "mock")
+
+# Rutas de referencia del uho-auth-kit (Token DRF) en
+# /api/v1/integraciones/kit/auth/. Desactivadas: el SIGACU usa JWT.
+UHO_KIT_ENABLED = env_bool("UHO_KIT_ENABLED", False)
 
 
 # ---------------------------------------------------------------------------

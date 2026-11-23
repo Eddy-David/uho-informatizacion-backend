@@ -11,7 +11,10 @@ TESTING = True
 
 # PostgreSQL también en pruebas: se reutiliza la configuración de ``base`` y
 # Django crea una base de datos temporal (test_uho_sigacu) por sesión de pytest.
-DATABASES["default"]["TEST"] = {"NAME": env("POSTGRES_TEST_DB", "test_uho_sigacu")}  # noqa: F405
+DATABASES["default"]["TEST"] = {  # noqa: F405
+    "NAME": env("POSTGRES_TEST_DB", "test_uho_sigacu"),  # noqa: F405
+    "MIRROR": None,
+}
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
@@ -33,3 +36,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {  # noqa: F405
 }
 
 MEDIA_ROOT = BASE_DIR / "media" / "test"  # noqa: F405
+
+# Las pruebas del comando ``seed_data`` no migran dentro de la transacción de
+# pytest (las tablas ya las creó el test runner).
+SEED_DATA_COMMAND_ARGS = ("--no-migrate",)

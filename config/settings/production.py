@@ -13,11 +13,26 @@ TESTING = False
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost")
 
-if SECRET_KEY == "django-insecure-change-me-in-production":  # noqa: F405
+_INSEGURAS = {
+    "",
+    "django-insecure-change-me-in-production",
+    "cambiame-por-una-clave-segura-y-unica-de-al-menos-50-caracteres",
+}
+if SECRET_KEY in _INSEGURAS or len(SECRET_KEY) < 32:  # noqa: F405
     raise RuntimeError(
-        "DJANGO_SECRET_KEY no está configurada. Defina una clave segura en .env "
-        "antes de iniciar en producción."
+        "DJANGO_SECRET_KEY no está configurada (o es el valor de ejemplo). "
+        "Genere una clave segura antes de iniciar en producción:\n"
+        "  python -c \"from django.core.management.utils import get_random_secret_key; "
+        "print(get_random_secret_key())\""
     )
+
+# Correo: si EMAIL_HOST no está definido se usa la consola (evita fallos SMTP
+# en la pila de demostración). Con EMAIL_HOST definido se usa SMTP por defecto.
+EMAIL_HOST = env("EMAIL_HOST", "")
+if EMAIL_HOST:
+    EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # --- Seguridad HTTP ---------------------------------------------------------
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
@@ -40,7 +55,7 @@ CSRF_COOKIE_SAMESITE = "Lax"
 X_FRAME_OPTIONS = "DENY"
 
 # --- Correo -----------------------------------------------------------------
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+# (resuelto arriba: SMTP si hay EMAIL_HOST, consola si no)
 
 # --- Canales: Redis obligatorio en producción ------------------------------
 if env_bool("USE_IN_MEMORY_CHANNEL_LAYER", False):

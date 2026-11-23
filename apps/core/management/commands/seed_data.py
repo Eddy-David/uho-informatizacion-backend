@@ -1,21 +1,32 @@
-"""``python manage.py seed_data`` — datos iniciales del SIGACU.
+"""``python manage.py seed_data`` — datos iniciales del SIGACU en un solo comando.
 
-Crea sedes, áreas, puntos de control, nomencladores, plantilla de solapín,
-usuarios de demostración (uno por rol) y registros de muestra para que el
-dashboard y los módulos tengan información al primer arranque.
+Aplica migraciones (crea las tablas si aún no existen), sincroniza los roles
+institucionales, y crea sedes, áreas, puntos de control, nomencladores, plantilla
+de solapín, usuarios de demostración (uno por rol) y registros de muestra para
+que el dashboard y los módulos tengan información al primer arranque.
 
 Uso::
 
-    python manage.py seed_data               # crea solo lo que falta
-    python manage.py seed_data --reset       # elimina y recrea los datos
+    python manage.py seed_data               # migra + crea solo lo que falta
+    python manage.py seed_data --reset       # elimina y recrea los datos demo
     python manage.py seed_data --no-demo     # solo nomencladores y roles
+    python manage.py seed_data --no-migrate  # omite las migraciones automáticas
+
+Resultado de un arranque limpio (``docker compose up`` o tras ``dropdb``):
+
+* Tablas creadas por ``migrate``.
+* 15 roles institucionales (``RoleDefinition``) y 4 sedes.
+* 8 usuarios demo (uno por rol operativo) — contraseña ``Sigacu2026*``.
+* ~15 días de accesos, solapines, visitas, incidencias, vehículos y notificaciones.
 """
 
 from __future__ import annotations
 
+import argparse
 import random
 from datetime import timedelta
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -232,6 +243,33 @@ ANGOL = [
 class Command(BaseCommand):
     help = "Genera nomencladores, usuarios demo y datos de ejemplo del SIGACU."
 
+    def execute(self, *args, **options):
+        """Aplica migraciones y luego siembra los datos.
+
+        ``migrate`` se ejecuta **antes** de abrir la transacción del comando y
+        **fuera** de ella: en PostgreSQL no se pueden anidar las sentencias DDL
+        de las migraciones dentro de una transacción abierta aquí, y en una base
+        vacía ``migrate`` debe poder confirmar por sí mismo. En las pruebas el
+        runner pasa ``--no-migrate`` para no migrar dentro de su transacción.
+        """
+        if not options.get("no_migrate"):
+            self._migrate()
+        return super().execute(*args, **options)
+
+    def create_parser(self, prog_name, subcommand, **kwargs):
+        """Añade ``--no-migrate`` sin exponerlo en ``--help``.
+
+        Lo usa ``settings.testing`` (comando de prueba paralelo) para no
+        ejecutar migraciones dentro de una transacción de prueba.
+        """
+        parser = super().create_parser(prog_name, subcommand, **kwargs)
+        parser.add_argument(
+            "--no-migrate",
+            action="store_true",
+            help=argparse.SUPPRESS,
+        )
+        return parser
+
     def add_arguments(self, parser):
         parser.add_argument(
             "--reset",
@@ -247,20 +285,26 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         reset = options["reset"]
-        with_demo = not options["no_demo"]
+        with_demo = not options.get("no_demo")
 
         if reset:
             self.stdout.write(self.style.WARNING("Eliminando datos previos de demostración…"))
+            from django.db import models as django_models
+
             AccessLog.objects.all().delete()
             VehicleMovement.objects.all().delete()
             Incident.objects.all().delete()
-            VisitRequest.all_objects.all().delete()
-            Badge.all_objects.all().delete()
-            BadgeTemplate.all_objects.all().delete()
-            AuthorizedVehicle.all_objects.all().delete()
+            VisitRequest.objects.all().delete()
+            # ``Badge`` tiene borrado lógico y su FK a ``User`` es PROTECT: hay
+            # que borrar físicamente los solapines (también los "eliminados")
+            # antes que los usuarios demo.
+            django_models.QuerySet.delete(Badge.all_objects.all())
+            BadgeTemplate.objects.all().delete()
+            AuthorizedVehicle.objects.all().delete()
             Notification.objects.all().delete()
             User.objects.filter(username__in=[u["username"] for u in DEMO_USERS]).delete()
 
+        roles = self._sync_roles()
         campuses = self._seed_campuses()
         units = self._seed_units(campuses)
         points = self._seed_points(campuses)
@@ -279,9 +323,46 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("\nDatos iniciales creados correctamente."))
         self.stdout.write(
+            f"  Roles institucionales: {roles[0]} creados / {roles[1]} actualizados\n"
+            f"  Sedes: {len(campuses)}\n"
             f"  Usuarios demo: {len(users)} (contraseña: {DEMO_PASSWORD})\n"
-            "  Ejemplo: lourdes.columbie / Sigacu2026*\n"
+            "  Ejemplo: yusimi.perez / Sigacu2026* (superadministrador)\n"
         )
+
+    # ------------------------------------------------------------------ setup
+    def _migrate(self):
+        """Crea/actualiza las tablas antes de sembrar datos.
+
+        Se ejecuta **fuera** de la transacción del comando (ver ``handle``):
+        cada migración decide si abre la suya y en PostgreSQL el DDL anidado
+        falla. En ``--no-migrate`` o en pruebas se omite.
+        """
+        self.stdout.write("Aplicando migraciones (creación de tablas)…")
+        call_command("migrate", interactive=False, verbosity=0)
+
+    def _sync_roles(self) -> tuple[int, int]:
+        """Crea/actualiza los roles institucionales (``sync_roles``)."""
+        from apps.usuarios.constants import RoleCode, role_definition
+        from apps.usuarios.models import RoleDefinition
+
+        created_count = updated_count = 0
+        for index, code in enumerate(RoleCode):
+            meta = role_definition(code.value)
+            defaults = {
+                "label": meta["label"],
+                "description": meta["description"],
+                "module": meta["module"],
+                "is_system": True,
+                "sort_order": index,
+            }
+            if not RoleDefinition.objects.filter(code=code.value).exists():
+                defaults["permissions"] = meta["permissions"]
+                RoleDefinition.objects.create(code=code.value, **defaults)
+                created_count += 1
+            else:
+                RoleDefinition.objects.filter(code=code.value).update(**defaults)
+                updated_count += 1
+        return created_count, updated_count
 
     # ------------------------------------------------------------------ seed
     def _seed_campuses(self) -> dict[str, CampusSite]:
@@ -350,7 +431,13 @@ class Command(BaseCommand):
             "qr": {"x": 62, "y": 56, "w": 30, "h": 30},
             "access_level": {"x": 6, "y": 80, "w": 50, "h": 10},
         }
-        for user_type in (UserType.STUDENT, UserType.TEACHER, UserType.WORKER, UserType.VISITOR):
+        for user_type in (
+            UserType.STUDENT,
+            UserType.TEACHER,
+            UserType.WORKER,
+            UserType.MANAGER,
+            UserType.VISITOR,
+        ):
             obj, _ = BadgeTemplate.objects.get_or_create(
                 name=f"Plantilla {user_type.label}",
                 user_type=user_type.value,
@@ -381,22 +468,29 @@ class Command(BaseCommand):
         return users
 
     def _seed_badges(self, users, templates):
-        from apps.solapines.services import nivel_acceso_por_defecto
+        from apps.solapines.services import nivel_acceso_por_defecto, plantilla_para
 
         for user in users.values():
-            template = templates.get(user.tipo_usuario)
+            # ``plantilla_para`` resuelve la plantilla por defecto del tipo de
+            # usuario (RF-03.1); no se crea un solapín sin plantilla.
+            template = templates.get(user.tipo_usuario) or plantilla_para(user.tipo_usuario)
+            if template is None:
+                self.stderr.write(
+                    f"  Aviso: no hay plantilla de solapín para {user.tipo_usuario}; "
+                    f"se omite el solapín de {user.username}."
+                )
+                continue
             # RF-03.7: el nivel del solapín se deriva del tipo de usuario.
             nivel = nivel_acceso_por_defecto(user.tipo_usuario)
-            Badge.objects.get_or_create(
-                user=user,
-                defaults={
-                    "template": template,
-                    "access_level": nivel,
-                    "expires_at": timezone.now() + timedelta(days=730),
-                    "valid_from": timezone.localdate() - timedelta(days=60),
-                    "valid_until": timezone.localdate() + timedelta(days=670),
-                },
-            )
+            if not Badge.objects.filter(user=user).exists():
+                Badge.objects.create(
+                    user=user,
+                    template=template,
+                    access_level=nivel,
+                    expires_at=timezone.now() + timedelta(days=730),
+                    valid_from=timezone.localdate() - timedelta(days=60),
+                    valid_until=timezone.localdate() + timedelta(days=670),
+                )
             # Se mantiene coherente el nivel del perfil con el del solapín
             # (RF-03.6 / RF-03.7): ambos salen de la misma regla.
             if user.nivel_acceso != nivel:
